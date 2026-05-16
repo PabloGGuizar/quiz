@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagrama de Arquitectura - Quiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0f24;
+            --primary: #5bc0be;
+            --secondary: #3a506b;
+            --accent: #2ecc71;
+            --card-bg: rgba(28, 37, 65, 0.7);
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0f24 0%, #1a2245 100%);
+            color: #e0e6ed;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        /* Efecto Cristal (Glassmorphism) */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(91, 192, 190, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover, .glass-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(91, 192, 190, 0.4);
+            transform: translateY(-5px);
+            cursor: pointer;
+        }
+
+        .glass-card.active {
+            background: rgba(91, 192, 190, 0.1);
+        }
+
+        /* Animación de Flujo de Datos */
+        .data-flow {
+            position: relative;
+            width: 4px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 0.5rem auto;
+        }
+
+        @media (min-width: 768px) {
+            .data-flow {
+                width: 60px;
+                height: 4px;
+                margin: auto 1rem;
+            }
+        }
+
+        .data-dot {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        /* Animaciones para diferentes direcciones */
+        @media (min-width: 768px) {
+            .flow-right { animation: flowRight 1.5s infinite linear; width: 30%; }
+            .flow-both { animation: flowBoth 2s infinite linear; width: 30%; }
+        }
+        @media (max-width: 767px) {
+            .flow-right { animation: flowDown 1.5s infinite linear; height: 30%; }
+            .flow-both { animation: flowBothDown 2s infinite linear; height: 30%; }
+        }
+
+        @keyframes flowRight {
+            0% { left: -30%; }
+            100% { left: 100%; }
+        }
+        @keyframes flowDown {
+            0% { top: -30%; }
+            100% { top: 100%; }
+        }
+        @keyframes flowBoth {
+            0% { left: -30%; background: var(--primary); }
+            49% { left: 100%; background: var(--primary); }
+            50% { left: 100%; background: var(--accent); }
+            100% { left: -30%; background: var(--accent); }
+        }
+        @keyframes flowBothDown {
+            0% { top: -30%; background: var(--primary); }
+            49% { top: 100%; background: var(--primary); }
+            50% { top: 100%; background: var(--accent); }
+            100% { top: -30%; background: var(--accent); }
+        }
+
+        /* Panel de detalles */
+        #details-panel {
+            min-height: 180px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideUp 0.5s forwards ease-out;
+        }
+
+        @keyframes slideUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon-container {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(91, 192, 190, 0.1);
+            margin: 0 auto 1rem auto;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center mb-10 w-full max-w-5xl">
+        <h1 class="text-4xl font-bold mb-4" style="color: var(--primary); text-shadow: 0 0 15px rgba(91,192,190,0.5);">Arquitectura Serverless del Quiz</h1>
+        <p class="text-lg text-gray-400">Haz clic en cada componente para explorar su función en el sistema.</p>
+    </div>
+
+    <!-- Contenedor del Diagrama -->
+    <div class="flex flex-col md:flex-row items-center justify-center w-full max-w-6xl mb-12 relative z-10">
+        
+        <!-- 1. Cliente -->
+        <div class="glass-card w-64 p-6 text-center node" data-node="client">
+            <div class="icon-container"><i data-lucide="laptop" class="w-8 h-8"></i></div>
+            <h2 class="text-xl font-bold mb-2">1. Dispositivo</h2>
+            <p class="text-sm text-gray-400">El alumno</p>
+        </div>
+
+        <!-- Conector -->
+        <div class="data-flow"><div class="data-dot flow-right"></div></div>
+
+        <!-- 2. Frontend -->
+        <div class="glass-card w-64 p-6 text-center node" data-node="frontend">
+            <div class="icon-container"><i data-lucide="globe" class="w-8 h-8"></i></div>
+            <h2 class="text-xl font-bold mb-2">2. GitHub Pages</h2>
+            <p class="text-sm text-gray-400">Frontend (HTML/JS)</p>
+        </div>
+
+        <!-- Conector -->
+        <div class="data-flow"><div class="data-dot flow-both"></div></div>
+
+        <!-- 3. Backend -->
+        <div class="glass-card w-64 p-6 text-center node" data-node="backend">
+            <div class="icon-container"><i data-lucide="cpu" class="w-8 h-8"></i></div>
+            <h2 class="text-xl font-bold mb-2">3. Apps Script</h2>
+            <p class="text-sm text-gray-400">Motor Backend</p>
+        </div>
+
+        <!-- Conector -->
+        <div class="data-flow"><div class="data-dot flow-both" style="background: var(--accent);"></div></div>
+
+        <!-- 4. Base de Datos -->
+        <div class="glass-card w-64 p-6 text-center node" data-node="database">
+            <div class="icon-container" style="color: var(--accent); background: rgba(46, 204, 113, 0.1);"><i data-lucide="database" class="w-8 h-8"></i></div>
+            <h2 class="text-xl font-bold mb-2">4. Google Sheets</h2>
+            <p class="text-sm text-gray-400">Base de Datos</p>
+        </div>
+
+    </div>
+
+    <!-- Panel de Detalles -->
+    <div id="details-panel" class="glass-card w-full max-w-4xl p-8 border-l-4 border-l-[#5bc0be]">
+        <div class="flex items-start gap-4">
+            <div id="detail-icon" class="p-3 bg-gray-800 rounded-lg text-[#5bc0be]">
+                <i data-lucide="info" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 id="detail-title" class="text-2xl font-bold mb-3">Interacción Segura</h3>
+                <p id="detail-desc" class="text-gray-300 leading-relaxed text-lg">
+                    Selecciona un componente arriba para ver cómo procesa la información, evalúa el quiz y protege los datos contra trampas e inyecciones.
+                </p>
+                <ul id="detail-list" class="mt-4 space-y-2 text-gray-400 hidden">
+                    <!-- Lista inyectada por JS -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Inicializar iconos de Lucide
+        lucide.createIcons();
+
+        // Datos de cada nodo
+        const nodeData = {
+            client: {
+                title: "1. Dispositivo del Alumno (Navegador)",
+                desc: "Es el punto de origen. Aquí el usuario interactúa visualmente con la plataforma.",
+                icon: "laptop",
+                color: "#5bc0be",
+                list: [
+                    "🔹 Ingresa su correo, contraseña (o crea usuario nuevo).",
+                    "🔹 Selecciona las respuestas del cuestionario.",
+                    "🔹 No tiene acceso a las respuestas correctas (estas no existen en su navegador)."
+                ]
+            },
+            frontend: {
+                title: "2. GitHub Pages (El Frontend Estático)",
+                desc: "Aloja los archivos de interfaz (HTML, CSS, JS). Al ser estático, es 100% gratuito y nunca se cae, pero no puede procesar datos ocultos.",
+                icon: "globe",
+                color: "#5bc0be",
+                list: [
+                    "🔹 <b>Validación UI:</b> Verifica que los campos no estén vacíos.",
+                    "🔹 <b>Empaquetado:</b> Convierte las respuestas en un JSON.",
+                    "🔹 <b>Seguridad CORS:</b> Disfraza la petición enviándola como <code>text/plain</code> mediante <code>fetch()</code> hacia Google."
+                ]
+            },
+            backend: {
+                title: "3. Google Apps Script (El Motor/Backend)",
+                desc: "Es el 'cerebro' oculto de la operación. Funciona como un cadenero de seguridad y un profesor al mismo tiempo. El código aquí es invisible para el alumno.",
+                icon: "cpu",
+                color: "#5bc0be",
+                list: [
+                    "🔹 <b>Seguridad:</b> Valida que el correo y contraseña coincidan.",
+                    "🔹 <b>Reglas de Negocio:</b> Rechaza intentos si el usuario ya gastó sus 3 oportunidades.",
+                    "🔹 <b>Evaluación:</b> Compara los datos recibidos con las respuestas correctas ocultas en su memoria.",
+                    "🔹 <b>Anonimato:</b> Genera el Top 10 tomando solo los nombres de usuario, censurando los correos."
+                ]
+            },
+            database: {
+                title: "4. Google Sheets (La Base de Datos Segura)",
+                desc: "Funciona como el almacenamiento persistente. Al estar conectada internamente con Apps Script, es imposible acceder a ella desde fuera sin pasar por la validación.",
+                icon: "database",
+                color: "#2ecc71",
+                list: [
+                    "🔹 <b>Pestaña Usuarios:</b> Guarda el Username, Correo, Contraseña, y lleva la cuenta de los Intentos Restantes.",
+                    "🔹 <b>Pestaña Resultados:</b> Actúa como una bitácora. Añade una fila nueva cada vez que alguien hace un examen, con hora exacta y puntaje."
+                ]
+            }
+        };
+
+        const nodes = document.querySelectorAll('.node');
+        const dTitle = document.getElementById('detail-title');
+        const dDesc = document.getElementById('detail-desc');
+        const dList = document.getElementById('detail-list');
+        const dIcon = document.getElementById('detail-icon');
+        const panel = document.getElementById('details-panel');
+
+        nodes.forEach(node => {
+            node.addEventListener('click', () => {
+                // Remover active de todos
+                nodes.forEach(n => n.classList.remove('active'));
+                // Activar el clickeado
+                node.classList.add('active');
+
+                // Obtener datos
+                const data = nodeData[node.dataset.node];
+
+                // Actualizar panel (con pequeña animación de reinicio)
+                panel.style.animation = 'none';
+                panel.offsetHeight; // trigger reflow
+                panel.style.animation = 'slideUp 0.4s forwards ease-out';
+
+                dTitle.textContent = data.title;
+                dDesc.innerHTML = data.desc;
+                panel.style.borderLeftColor = data.color;
+                dIcon.style.color = data.color;
+                
+                // Actualizar icono dinámicamente
+                dIcon.innerHTML = `<i data-lucide="${data.icon}" class="w-8 h-8"></i>`;
+                lucide.createIcons();
+
+                // Actualizar lista
+                dList.innerHTML = data.list.map(item => `<li>${item}</li>`).join('');
+                dList.classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>
