@@ -4,163 +4,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quiz: El Sistema Solar</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #0b132b; color: #fff; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .card { background-color: #1c2541; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        input, select, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; box-sizing: border-box; }
-        button { background-color: #3a506b; color: white; cursor: pointer; font-weight: bold; font-size: 16px; }
-        button:hover { background-color: #5bc0be; color: #0b132b;}
-        .error { background-color: #ff4d4d; padding: 10px; border-radius: 5px; display: none; margin-bottom: 10px; }
-        .success { background-color: #5bc0be; color: #0b132b; padding: 10px; border-radius: 5px; display: none; margin-bottom: 10px; }
-        #leaderboard { display: none; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px;}
-        th, td { border: 1px solid #3a506b; padding: 8px; text-align: left; }
-        th { background-color: #3a506b; }
-        .nota { font-size: 0.8em; color: #aaa; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <h1 style="text-align: center;">Quiz: Exploradores del Sistema Solar</h1>
-    
-    <div id="mensaje-error" class="error"></div>
-    <div id="mensaje-exito" class="success"></div>
-
-    <div class="card" id="quiz-container">
-        <h3>1. Identificación</h3>
-        <p class="nota">Si es tu primer intento, ingresa un nombre de usuario. Si ya hiciste el quiz, ingresa tu correo y contraseña (dejando el nombre de usuario vacío o igual).</p>
+    <div class="contenedor-principal">
+        <h1 class="titulo-quiz">🚀 Quiz: Exploradores del Sistema Solar</h1>
         
-        <input type="text" id="username" placeholder="Nombre de Usuario (Solo primer intento)">
-        <input type="email" id="email" placeholder="Correo Electrónico (Requerido)">
-        <input type="password" id="password" placeholder="Contraseña (Requerida)">
+        <div id="mensaje-error" class="alerta alerta-error"></div>
+        <div id="mensaje-exito" class="alerta alerta-exito"></div>
 
-        <h3>2. Preguntas</h3>
-        <label>1. ¿Cuál es el planeta más grande de nuestro Sistema Solar?</label>
-        <select id="p1">
-            <option value="A">Saturno</option>
-            <option value="B">Júpiter</option>
-            <option value="C">Neptuno</option>
-        </select>
-
-        <label>2. ¿Qué planeta es conocido como el "Planeta Rojo"?</label>
-        <select id="p2">
-            <option value="A">Marte</option>
-            <option value="B">Venus</option>
-            <option value="C">Mercurio</option>
-        </select>
-
-        <label>3. ¿Cuál es el planeta más cercano al Sol?</label>
-        <select id="p3">
-            <option value="A">Tierra</option>
-            <option value="B">Venus</option>
-            <option value="C">Mercurio</option>
-        </select>
-
-        <button id="btn-enviar" onclick="enviarQuiz()">Enviar Respuestas</button>
-    </div>
-
-    <!-- Tablero de Posiciones -->
-    <div class="card" id="leaderboard">
-        <h2>Top Exploradores</h2>
-        <table id="tabla-posiciones">
-            <thead>
-                <tr>
-                    <th>Usuario</th>
-                    <th>Mejor Puntaje</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Se llena por JavaScript -->
-            </tbody>
-        </table>
-        <br>
-        <button onclick="reiniciarPantalla()">Hacer otro intento</button>
-    </div>
-
-    <script>
-        // ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT
-        const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzWGnxPnf1z-oxw5fHIHZwZWHU0bSuQzIl9vZrvsb5d0QkM4WokxUHAn6pGAInUprq1NQ/exec";
-
-        async function enviarQuiz() {
-            const btn = document.getElementById("btn-enviar");
-            const msjError = document.getElementById("mensaje-error");
-            const msjExito = document.getElementById("mensaje-exito");
-            
-            // Recolectar datos
-            const payload = {
-                username: document.getElementById("username").value,
-                email: document.getElementById("email").value,
-                password: document.getElementById("password").value,
-                p1: document.getElementById("p1").value,
-                p2: document.getElementById("p2").value,
-                p3: document.getElementById("p3").value
-            };
-
-            // Validación básica front-end
-            if(!payload.email || !payload.password) {
-                mostrarError("El correo y la contraseña son obligatorios.");
-                return;
-            }
-
-            // Preparar UI para el envío
-            btn.innerText = "Evaluando en el servidor...";
-            btn.disabled = true;
-            msjError.style.display = "none";
-            msjExito.style.display = "none";
-
-            try {
-                // Envío con POST como text/plain para evadir CORS en Github Pages
-                const respuesta = await fetch(GOOGLE_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
-                });
-
-                const resultado = await respuesta.json();
-
-                if(resultado.estado === "error") {
-                    mostrarError(resultado.mensaje);
-                    btn.innerText = "Enviar Respuestas";
-                    btn.disabled = false;
-                } else {
-                    // Éxito: Ocultar quiz y mostrar Leaderboard
-                    document.getElementById("quiz-container").style.display = "none";
-                    document.getElementById("leaderboard").style.display = "block";
+        <div class="card" id="quiz-container">
+            <form id="formulario-quiz">
+                <div class="seccion">
+                    <h3>1. Identificación</h3>
+                    <p class="nota">Si es tu primer intento, ingresa un nombre de usuario. Si ya hiciste el quiz, ingresa tu correo y contraseña (dejando el nombre de usuario vacío).</p>
                     
-                    msjExito.innerHTML = `¡Examen evaluado! Obtuviste <strong>${resultado.puntajeObtenido} de 3</strong> puntos.<br>Te quedan ${resultado.intentosRestantes} intentos.`;
-                    msjExito.style.display = "block";
+                    <div class="grupo-input">
+                        <input type="text" id="username" placeholder="Nombre de Usuario (Solo primer intento)">
+                    </div>
+                    <div class="grupo-input">
+                        <input type="email" id="email" placeholder="Correo Electrónico (Requerido)" required>
+                    </div>
+                    <div class="grupo-input">
+                        <input type="password" id="password" placeholder="Contraseña (Requerida)" required>
+                    </div>
+                </div>
 
-                    // Construir la tabla
-                    const tbody = document.querySelector("#tabla-posiciones tbody");
-                    tbody.innerHTML = "";
-                    resultado.leaderboard.forEach(fila => {
-                        tbody.innerHTML += `<tr><td>${fila.user}</td><td>${fila.score} / 3</td></tr>`;
-                    });
-                }
-            } catch (error) {
-                mostrarError("Error de conexión con el servidor.");
-                btn.innerText = "Enviar Respuestas";
-                btn.disabled = false;
-            }
-        }
+                <div class="seccion">
+                    <h3>2. Preguntas</h3>
+                    
+                    <div class="grupo-input">
+                        <label>1. ¿Cuál es el planeta más grande de nuestro Sistema Solar?</label>
+                        <select id="p1">
+                            <option value="A">Saturno</option>
+                            <option value="B">Júpiter</option>
+                            <option value="C">Neptuno</option>
+                        </select>
+                    </div>
 
-        function mostrarError(texto) {
-            const msjError = document.getElementById("mensaje-error");
-            msjError.innerText = texto;
-            msjError.style.display = "block";
-        }
+                    <div class="grupo-input">
+                        <label>2. ¿Qué planeta es conocido como el "Planeta Rojo"?</label>
+                        <select id="p2">
+                            <option value="A">Marte</option>
+                            <option value="B">Venus</option>
+                            <option value="C">Mercurio</option>
+                        </select>
+                    </div>
 
-        function reiniciarPantalla() {
-            document.getElementById("quiz-container").style.display = "block";
-            document.getElementById("leaderboard").style.display = "none";
-            document.getElementById("mensaje-exito").style.display = "none";
-            document.getElementById("btn-enviar").innerText = "Enviar Respuestas";
-            document.getElementById("btn-enviar").disabled = false;
-            // Limpiamos solo las opciones, mantenemos email y password cargados
-            document.getElementById("p1").value = "A";
-            document.getElementById("p2").value = "A";
-            document.getElementById("p3").value = "A";
-        }
-    </script>
+                    <div class="grupo-input">
+                        <label>3. ¿Cuál es el planeta más cercano al Sol?</label>
+                        <select id="p3">
+                            <option value="A">Tierra</option>
+                            <option value="B">Venus</option>
+                            <option value="C">Mercurio</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-enviar" class="btn-primario">Enviar Respuestas</button>
+            </form>
+        </div>
+
+        <div class="card" id="leaderboard" style="display: none;">
+            <h2 class="titulo-leaderboard">🏆 Top Exploradores</h2>
+            <div class="tabla-contenedor">
+                <table id="tabla-posiciones">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Mejor Puntaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+            <button onclick="reiniciarPantalla()" class="btn-secundario">Hacer otro intento</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
