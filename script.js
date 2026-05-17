@@ -4,10 +4,10 @@ const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzWGnxPnf1z-oxw5fHIH
 // Esperar a que el documento cargue para asignar el evento al formulario
 document.addEventListener("DOMContentLoaded", () => {
     const formulario = document.getElementById("formulario-quiz");
-    
+
     formulario.addEventListener("submit", async function(evento) {
         // Esto evita que el navegador recargue la página al enviar el formulario
-        evento.preventDefault(); 
+        evento.preventDefault();
         await enviarQuiz();
     });
 });
@@ -16,7 +16,7 @@ async function enviarQuiz() {
     const btn = document.getElementById("btn-enviar");
     const msjError = document.getElementById("mensaje-error");
     const msjExito = document.getElementById("mensaje-exito");
-    
+
     // Recolectar datos
     const payload = {
         username: document.getElementById("username").value,
@@ -48,22 +48,29 @@ async function enviarQuiz() {
             btn.innerText = "Enviar Respuestas";
             btn.disabled = false;
         } else {
+            // Mejora de seguridad: limpiar campos sensibles del DOM
+            // antes de mostrar el leaderboard, por si hubiera algún XSS residual
+            document.getElementById("email").value = "";
+            document.getElementById("password").value = "";
+            document.getElementById("username").value = "";
+
             // Éxito: Ocultar quiz y mostrar Leaderboard
             document.getElementById("quiz-container").style.display = "none";
             document.getElementById("leaderboard").style.display = "block";
-            
+
             msjExito.innerHTML = `¡Examen evaluado! Obtuviste <strong>${resultado.puntajeObtenido} de 3</strong> puntos.<br>Te quedan ${resultado.intentosRestantes} intentos.`;
             msjExito.style.display = "block";
 
-            // Construir la tabla
+            // Construir la tabla de forma segura con textContent
+            // para evitar que nombres de usuario maliciosos se ejecuten como código
             const tbody = document.querySelector("#tabla-posiciones tbody");
             tbody.innerHTML = "";
             resultado.leaderboard.forEach(fila => {
-    const fila_dom = document.createElement('tr');
-    fila_dom.insertCell(0).textContent = fila.user;
-    fila_dom.insertCell(1).textContent = `${fila.score} / 3`;
-    tbody.appendChild(fila_dom);
-});
+                const fila_dom = document.createElement('tr');
+                fila_dom.insertCell(0).textContent = fila.user;
+                fila_dom.insertCell(1).textContent = `${fila.score} / 3`;
+                tbody.appendChild(fila_dom);
+            });
         }
     } catch (error) {
         mostrarError("Error de conexión con el servidor. Revisa tu consola para más detalles.");
@@ -84,12 +91,12 @@ function reiniciarPantalla() {
     document.getElementById("mensaje-exito").style.display = "none";
     document.getElementById("btn-enviar").innerText = "Enviar Respuestas";
     document.getElementById("btn-enviar").disabled = false;
-    
+
     // Limpiamos solo las opciones del quiz, mantenemos email y password cargados
     document.getElementById("p1").value = "A";
     document.getElementById("p2").value = "A";
     document.getElementById("p3").value = "A";
-    
+
     // Hacemos scroll hacia arriba
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
