@@ -59,8 +59,11 @@ async function enviarQuiz() {
             const tbody = document.querySelector("#tabla-posiciones tbody");
             tbody.innerHTML = "";
             resultado.leaderboard.forEach(fila => {
-                tbody.innerHTML += `<tr><td>${fila.user}</td><td>${fila.score} / 3</td></tr>`;
-            });
+    const fila_dom = document.createElement('tr');
+    fila_dom.insertCell(0).textContent = fila.user;
+    fila_dom.insertCell(1).textContent = `${fila.score} / 3`;
+    tbody.appendChild(fila_dom);
+});
         }
     } catch (error) {
         mostrarError("Error de conexión con el servidor. Revisa tu consola para más detalles.");
