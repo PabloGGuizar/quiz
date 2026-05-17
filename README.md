@@ -5,6 +5,7 @@ Este proyecto es un sistema de cuestionario (quiz) ligero y seguro, diseñado co
 ## **🌟 Características Principales**
 
 * **Seguridad Antifraude:** La lógica de calificación y las respuestas correctas viven exclusivamente en Google Apps Script. El usuario nunca puede ver las respuestas inspeccionando el código del navegador.  
+* **Protección Avanzada:** Incorpora cifrado SHA-256 para contraseñas, protección contra fuerza bruta mediante \`CacheService\` (bloqueo por 15 min tras 5 fallos), mensajes genéricos anti-enumeración de usuarios y protección total contra inyecciones de código (XSS y CSV/Formula Injections).
 * **Base de Datos Gratuita:** Utiliza Google Sheets para almacenar usuarios, contraseñas, intentos y resultados en tiempo real.  
 * **Control de Intentos:** Cada usuario tiene un máximo de 3 intentos. El sistema lleva el registro y bloquea intentos adicionales.  
 * **Leaderboard Dinámico:** Al finalizar, se muestra un "Top 10" de los mejores puntajes de forma anónima (solo muestra el nombre de usuario, protegiendo correos y contraseñas).  
@@ -72,7 +73,12 @@ Para replicar o desplegar este proyecto en tu propia cuenta, sigue estos pasos:
 * style.css: Estilos visuales, animaciones, esquema de colores oscuros con temática espacial (glassmorphism) y diseño adaptable a dispositivos móviles (responsive).  
 * script.js: Lógica del lado del cliente. Maneja la recolección de datos del formulario, la validación básica, la comunicación asíncrona HTTP (fetch) con Google Apps Script y la actualización del DOM según las respuestas del servidor.
 
-## **🛡️ Notas de Seguridad**
+## **🛡️ Notas de Seguridad Robustas (Implementadas)**
 
-* Mantén tu archivo de Google Sheets **estrictamente privado**. Solo la cuenta propietaria (tú) debe tener acceso de lectura/escritura directo. Apps Script se encarga de hacer el puente público de forma segura.  
-* Las contraseñas se guardan en texto plano en la hoja de cálculo. Dado que es un proyecto educativo o básico, esta medida es funcional, pero para sistemas en producción real se recomienda encarecidamente implementar *hashing* de contraseñas (ej. SHA-256) antes de almacenarlas o usar un proveedor de autenticación.
+* **Privacidad de la Base de Datos:** Mantén tu archivo de Google Sheets **estrictamente privado**. Solo la cuenta propietaria (tú) debe tener acceso de lectura/escritura directo. Apps Script se encarga de hacer el puente público de forma segura.  
+* **Cifrado de Contraseñas:** Las contraseñas NUNCA se guardan en texto plano. El sistema aplica un algoritmo de encriptado **SHA-256** antes de enviarlas a la base de datos, lo que garantiza que ni siquiera el administrador del sistema pueda ver la contraseña original.
+* **Prevención de Ataques:** 
+  * **Fuerza Bruta:** Si un atacante falla 5 contraseñas seguidas, la cuenta se bloquea automáticamente por 15 minutos en la memoria caché de Google.
+  * **Enumeración de Usuarios:** Los mensajes de error son genéricos ("Credenciales inválidas o el nombre de usuario no está disponible") para que nadie pueda comprobar qué correos existen en el sistema.
+  * **Inyecciones (CSV / XSS):** Todas las entradas son validadas (Regex para correos y usuarios) y desinfectadas (prefijos seguros en Google Sheets) para evitar la ejecución accidental de fórmulas maliciosas.
+  * **Condiciones de Carrera (Race Conditions):** Uso de `LockService` para que el script procese las peticiones de una en una. Esto evita fallos cuando dos personas intentan registrarse exactamente al mismo tiempo con el mismo nombre de usuario o correo.

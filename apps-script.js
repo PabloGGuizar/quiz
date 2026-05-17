@@ -1,15 +1,56 @@
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  // Intentar adquirir el bloqueo por hasta 10 segundos
+  if (!lock.tryLock(10000)) {
+    return ContentService.createTextOutput(JSON.stringify({
+      estado: "error",
+      mensaje: "El sistema está ocupado procesando otro registro. Por favor, intenta de nuevo en unos segundos."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   try {
     // 1. Parsear los datos recibidos y sanitizarlos (Prevenir inyección)
     var params = JSON.parse(e.postData.contents);
     var email = String(params.email).trim().toLowerCase();
     var password = String(params.password).trim();
     var usernameRequest = String(params.username).trim();
-    var p1 = String(params.p1).trim();
-    var p2 = String(params.p2).trim();
-    var p3 = String(params.p3).trim();
+    
+    // Función para evitar inyección de fórmulas en Google Sheets
+    function sanitizeForSheet(value) {
+      if (typeof value === "string" && /^[=+\-@]/.test(value)) {
+        return "'" + value;
+      }
+      return value;
+    }
+
+    var p1 = sanitizeForSheet(String(params.p1).trim());
+    var p2 = sanitizeForSheet(String(params.p2).trim());
+    var p3 = sanitizeForSheet(String(params.p3).trim());
 
     if (!email || !password) throw new Error("Faltan el correo o la contraseña.");
+    
+    // Validar formato de correo para prevenir inyecciones y errores
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Formato de correo electrónico inválido.");
+    }
+
+    // Prevención de ataques de fuerza bruta usando Cache
+    var cache = CacheService.getScriptCache();
+    var cacheKey = "bruteforce_" + email;
+    var failedAttempts = cache.get(cacheKey);
+    if (failedAttempts && parseInt(failedAttempts) >= 5) {
+      throw new Error("Demasiados intentos fallidos. Por seguridad, espera 15 minutos antes de volver a intentarlo.");
+    }
+
+    // Encriptar la contraseña usando SHA-256
+    var hashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password);
+    var hashedPassword = hashBytes.map(function(b) {
+        return ('0' + (b & 0xFF).toString(16)).slice(-2);
+    }).join('');
+
+    if (usernameRequest && !/^[a-zA-Z0-9_ áéíóúÁÉÍÓÚñÑüÜ]+$/.test(usernameRequest)) {
+      throw new Error("El nombre de usuario contiene caracteres sospechosos o no permitidos.");
+    }
 
     var libro = SpreadsheetApp.getActiveSpreadsheet();
     var sheetUsuarios = libro.getSheetByName("Usuarios");
@@ -30,9 +71,14 @@ function doPost(e) {
         userRowIndex = i + 1; // +1 porque los arreglos empiezan en 0 y las filas en 1
         isNewUser = false;
         
-        // Validar contraseña
-        if (String(dataUsuarios[i][2]) !== password) {
-          throw new Error("Contraseña incorrecta para este correo.");
+        // Validar contraseña comparando los hashes
+        if (String(dataUsuarios[i][2]) !== hashedPassword) {
+          var currentAttempts = failedAttempts ? parseInt(failedAttempts) : 0;
+          cache.put(cacheKey, (currentAttempts + 1).toString(), 900); // 900 seg = 15 minutos
+          throw new Error("Credenciales inválidas o el nombre de usuario no está disponible.");
+        } else {
+          // Si el login es exitoso, reiniciar intentos
+          cache.remove(cacheKey);
         }
         
         // Forzamos a usar el username que ya tiene registrado
@@ -42,7 +88,7 @@ function doPost(e) {
       
       // Si el correo no existe, pero el nombre de usuario que intenta registrar ya está tomado
       if (isNewUser && rowUsername === usernameRequest.toLowerCase()) {
-        throw new Error("El nombre de usuario '" + usernameRequest + "' ya está tomado. Elige otro.");
+        throw new Error("Credenciales inválidas o el nombre de usuario no está disponible.");
       }
     }
 
@@ -76,7 +122,7 @@ function doPost(e) {
     // 5. Guardar Datos en Hojas
     if (isNewUser) {
       // Nuevo usuario
-      sheetUsuarios.appendRow([usernameFinal, email, password, intentosRestantes, mejorPuntaje]);
+      sheetUsuarios.appendRow([usernameFinal, email, hashedPassword, intentosRestantes, mejorPuntaje]);
     } else {
       // Actualizar usuario existente
       sheetUsuarios.getRange(userRowIndex, 4).setValue(intentosRestantes);
@@ -116,5 +162,8 @@ function doPost(e) {
       estado: "error",
       mensaje: error.message
     })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    // Siempre liberar el bloqueo para la siguiente petición
+    lock.releaseLock();
   }
 }
