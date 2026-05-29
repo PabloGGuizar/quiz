@@ -5,17 +5,16 @@ const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzWGnxPnf1z-oxw5fHIH
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Lee el token del localStorage. Devuelve "" si no existe o ya expiró.
+ * Lee el token del localStorage. 
+ * Si está expirado lo envía igual para que el servidor lo valide y renueve.
  */
 function obtenerToken(username) {
     const raw = localStorage.getItem('quiz_token_' + username);
     if (!raw) return "";
     try {
         const datos = JSON.parse(raw);
-        if (Date.now() > datos.expira) {
-            localStorage.removeItem('quiz_token_' + username);
-            return "";
-        }
+        // Ya no borramos el token si expiró. Dejamos que el servidor 
+        // reciba el token viejo, lo valide y asigne uno nuevo transparente.
         return datos.token;
     } catch {
         // Formato antiguo sin expiración: borrar y tratar como nuevo
