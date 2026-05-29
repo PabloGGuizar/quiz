@@ -44,6 +44,11 @@ document.addEventListener("DOMContentLoaded", () => {
         evento.preventDefault();
         await enviarQuiz();
     });
+
+    const btnReiniciar = document.getElementById("btn-reiniciar");
+    if (btnReiniciar) {
+        btnReiniciar.addEventListener("click", reiniciarPantalla);
+    }
 });
 
 async function enviarQuiz() {
