@@ -169,6 +169,10 @@ button {
 }
 
 /* Tabla Leaderboard */
+#leaderboard {
+    display: none;
+}
+
 .titulo-leaderboard {
     text-align: center;
     color: gold;
