@@ -5,8 +5,10 @@ Este proyecto es un sistema de cuestionario (quiz) ligero y seguro, diseñado co
 ## **🌟 Características Principales**
 
 * **Autenticación sin contraseña:** Los usuarios solo ingresan un nombre de usuario. El servidor genera automáticamente un token único (UUID) la primera vez, lo guarda hasheado y lo entrega al navegador para que lo almacene en `localStorage`. En intentos posteriores, el token se envía y valida en el servidor sin que el usuario tenga que recordar nada.
+* **Expiración de tokens (7 días):** Los tokens expiran automáticamente a los 7 días, tanto en el cliente (`localStorage`) como en el servidor (columna `FechaToken` en la hoja). Al expirar, el servidor genera y devuelve un token nuevo de forma transparente, sin interrumpir al usuario.
 * **Seguridad Antifraude:** La lógica de calificación y las respuestas correctas viven exclusivamente en Google Apps Script. El usuario nunca puede ver las respuestas inspeccionando el código del navegador.
 * **Protección Avanzada:** Incorpora cifrado SHA-256 para tokens con un SALT global aleatorio almacenado en `PropertiesService`, protección contra fuerza bruta mediante `CacheService` (bloqueo por 15 min tras 5 fallos), mensajes descriptivos de error y protección total contra inyecciones de código (XSS y CSV/Formula Injections).
+* **Content Security Policy (CSP):** El frontend declara una política CSP estricta vía `<meta>` que restringe la ejecución de scripts, estilos y conexiones de red únicamente a los orígenes explícitamente permitidos (propio dominio y Google Apps Script).
 * **Tokens seguros en el servidor:** El SALT se genera aleatoriamente la primera vez que el script se ejecuta y se guarda de forma persistente en las Propiedades del Script, fuera del código fuente. Es imposible forjar un token válido sin conocer este SALT.
 * **Nombres de usuario únicos:** Dos usuarios no pueden compartir el mismo nombre. Si alguien intenta usar un nombre ya registrado sin el token correcto (por ejemplo, desde un dispositivo diferente), el servidor lo rechaza.
 * **Leaderboard con caché:** Al finalizar, se muestra un "Top 10" de los mejores puntajes. El leaderboard se almacena en caché por 60 segundos para evitar lecturas innecesarias a Google Sheets.
@@ -43,6 +45,7 @@ Para replicar o desplegar este proyecto en tu propia cuenta, sigue estos pasos:
    * Columna B: `TokenHash`
    * Columna C: `Intentos_Restantes`
    * Columna D: `Mejor_Puntaje`
+   * Columna E: `FechaToken`
 3. Crea una segunda pestaña llamada exactamente **Resultados** con estos encabezados en la fila 1:
    * Columna A: `Fecha`
    * Columna B: `Username`
@@ -51,7 +54,7 @@ Para replicar o desplegar este proyecto en tu propia cuenta, sigue estos pasos:
    * Columna E: `Pregunta_3`
    * Columna F: `Puntaje_Obtenido`
 
-> **Nota:** La columna de Email y Password del sistema anterior han sido eliminadas. La hoja ahora tiene 4 columnas en "Usuarios" (no 5). Si tienes datos anteriores, borra todos los registros de prueba (dejando solo los encabezados) antes de usar esta versión.
+> **Nota:** La hoja "Usuarios" ahora tiene **5 columnas** (A–E). La columna `FechaToken` es utilizada por el servidor para verificar la expiración del token a los 7 días. Si tienes datos anteriores, borra todos los registros de prueba (dejando solo los encabezados) antes de usar esta versión.
 
 ### **2\. Configurar Google Apps Script (Backend)**
 
@@ -92,6 +95,8 @@ Para replicar o desplegar este proyecto en tu propia cuenta, sigue estos pasos:
 * **Imposible forjar tokens:** Cualquier token inventado por un atacante, al ser hasheado con el SALT secreto del servidor, producirá un hash diferente al guardado en la base de datos. La petición será rechazada.
 * **Prevención de Ataques:**
   * **Fuerza Bruta:** Si alguien falla 5 veces seguidas el token de un mismo usuario, la cuenta se bloquea automáticamente por 15 minutos.
-  * **Inyecciones (CSV / XSS):** Todas las entradas son validadas (Regex + límite de longitud) y desinfectadas antes de guardarse en Google Sheets.
+  * **Inyecciones (CSV / XSS):** Todas las entradas son validadas (Regex + límite de longitud) y desinfectadas antes de guardarse en Google Sheets. El frontend usa `textContent` y nodos DOM en lugar de `innerHTML` para mostrar datos del servidor.
   * **Valores inválidos en respuestas:** El servidor verifica que `p1`, `p2` y `p3` existan en el JSON y sean únicamente `"A"`, `"B"` o `"C"` antes de evaluarlos.
   * **Condiciones de Carrera (Race Conditions):** Uso de `LockService` para que el script procese las peticiones de una en una.
+  * **Expiración de sesión:** Los tokens tienen una vida útil de 7 días validada en el servidor. Al expirar, se genera y rota un nuevo token automáticamente. Esto mitiga el riesgo de tokens robados o heredados en dispositivos compartidos.
+  * **Content Security Policy:** El frontend restringe mediante CSP los scripts, estilos y conexiones permitidas, reduciendo la superficie de ataque ante posibles inyecciones de terceros.

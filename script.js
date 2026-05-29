@@ -1,6 +1,40 @@
 // ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT
 const GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzWGnxPnf1z-oxw5fHIHZwZWHU0bSuQzIl9vZrvsb5d0QkM4WokxUHAn6pGAInUprq1NQ/exec";
 
+// Tiempo de vida del token: 7 días en milisegundos (sincronizado con el servidor)
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Lee el token del localStorage. Devuelve "" si no existe o ya expiró.
+ */
+function obtenerToken(username) {
+    const raw = localStorage.getItem('quiz_token_' + username);
+    if (!raw) return "";
+    try {
+        const datos = JSON.parse(raw);
+        if (Date.now() > datos.expira) {
+            localStorage.removeItem('quiz_token_' + username);
+            return "";
+        }
+        return datos.token;
+    } catch {
+        // Formato antiguo sin expiración: borrar y tratar como nuevo
+        localStorage.removeItem('quiz_token_' + username);
+        return "";
+    }
+}
+
+/**
+ * Guarda el token en localStorage junto con su fecha de expiración.
+ */
+function guardarToken(username, token) {
+    const datos = {
+        token: token,
+        expira: Date.now() + TOKEN_TTL_MS
+    };
+    localStorage.setItem('quiz_token_' + username, JSON.stringify(datos));
+}
+
 // Esperar a que el documento cargue para asignar el evento al formulario
 document.addEventListener("DOMContentLoaded", () => {
     const formulario = document.getElementById("formulario-quiz");
@@ -18,7 +52,7 @@ async function enviarQuiz() {
     const msjExito = document.getElementById("mensaje-exito");
 
     const username = document.getElementById("username").value.trim();
-    const token = localStorage.getItem('quiz_token_' + username) || "";
+    const token = obtenerToken(username);
 
     // Recolectar datos
     const payload = {
@@ -52,7 +86,7 @@ async function enviarQuiz() {
         } else {
             // Guardar token si el servidor asignó uno nuevo
             if (resultado.token) {
-                localStorage.setItem('quiz_token_' + username, resultado.token);
+                guardarToken(username, resultado.token);
             }
 
             // Mejora de seguridad: limpiar campos sensibles del DOM
@@ -64,7 +98,15 @@ async function enviarQuiz() {
             document.getElementById("quiz-container").style.display = "none";
             document.getElementById("leaderboard").style.display = "block";
 
-            msjExito.innerHTML = `¡Examen evaluado! Obtuviste <strong>${resultado.puntajeObtenido} de 3</strong> puntos.<br>Te quedan ${resultado.intentosRestantes} intentos.`;
+            msjExito.textContent = "";
+            const linea1 = document.createElement("span");
+            linea1.textContent = `¡Examen evaluado! Obtuviste `;
+            const negrita = document.createElement("strong");
+            negrita.textContent = `${resultado.puntajeObtenido} de 3`;
+            const linea2 = document.createTextNode(` puntos. Te quedan ${resultado.intentosRestantes} intentos.`);
+            msjExito.appendChild(linea1);
+            msjExito.appendChild(negrita);
+            msjExito.appendChild(linea2);
             msjExito.style.display = "block";
 
             // Construir la tabla de forma segura con textContent

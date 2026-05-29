@@ -105,7 +105,8 @@ function autenticarUsuario(dataUsuarios, usernameRequest, tokenRequest, tokenHas
       return {
         isNewUser: false,
         userRowIndex: i + 1, // +1 porque los arrays empiezan en 0 y las filas en 1
-        usernameFinal: dataUsuarios[i][0]
+        usernameFinal: dataUsuarios[i][0],
+        tokenFecha: dataUsuarios[i][4] || null // Columna 5: fecha de creación del token
       };
     }
   }
@@ -198,16 +199,25 @@ function doPost(e) {
 
     var auth = autenticarUsuario(dataUsuarios, input.username, input.token, tokenHashRecibido, cache, cacheKey, failedAttempts);
 
+    var SIETE_DIAS_MS    = 7 * 24 * 60 * 60 * 1000;
     var intentosRestantes = 3;
     var mejorPuntaje      = 0;
     var newTokenToReturn  = null;
     var finalTokenHash    = tokenHashRecibido;
+    var tokenRenovado     = false;
 
     if (!auth.isNewUser) {
       intentosRestantes = parseInt(dataUsuarios[auth.userRowIndex - 1][2], 10);
       mejorPuntaje      = parseInt(dataUsuarios[auth.userRowIndex - 1][3], 10) || 0;
       if (intentosRestantes <= 0) {
         throw new Error("Ya has agotado tus 3 intentos permitidos.");
+      }
+      // Renovar token si han pasado más de 7 días desde su creación
+      var fechaToken = auth.tokenFecha ? new Date(auth.tokenFecha) : null;
+      if (!fechaToken || (new Date() - fechaToken) > SIETE_DIAS_MS) {
+        newTokenToReturn = Utilities.getUuid();
+        finalTokenHash   = hashear(newTokenToReturn, SALT);
+        tokenRenovado    = true;
       }
     } else {
       // Usuario nuevo: generamos y hasheamos su token único
@@ -219,12 +229,17 @@ function doPost(e) {
     intentosRestantes--;
     if (puntaje > mejorPuntaje) mejorPuntaje = puntaje;
 
-    // Guardar en la hoja de Usuarios (estructura: Username, TokenHash, Intentos, MejorPuntaje)
+    // Guardar en la hoja de Usuarios (estructura: Username, TokenHash, Intentos, MejorPuntaje, FechaToken)
     if (auth.isNewUser) {
-      sheetUsuarios.appendRow([auth.usernameFinal, finalTokenHash, intentosRestantes, mejorPuntaje]);
+      sheetUsuarios.appendRow([auth.usernameFinal, finalTokenHash, intentosRestantes, mejorPuntaje, new Date()]);
     } else {
       sheetUsuarios.getRange(auth.userRowIndex, 3).setValue(intentosRestantes);
       sheetUsuarios.getRange(auth.userRowIndex, 4).setValue(mejorPuntaje);
+      if (tokenRenovado) {
+        // Actualizar hash y fecha al renovar el token
+        sheetUsuarios.getRange(auth.userRowIndex, 2).setValue(finalTokenHash);
+        sheetUsuarios.getRange(auth.userRowIndex, 5).setValue(new Date());
+      }
     }
 
     // Guardar el registro de este intento en la hoja de Resultados
