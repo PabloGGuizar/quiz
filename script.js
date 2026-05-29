@@ -17,11 +17,13 @@ async function enviarQuiz() {
     const msjError = document.getElementById("mensaje-error");
     const msjExito = document.getElementById("mensaje-exito");
 
+    const username = document.getElementById("username").value.trim();
+    const token = localStorage.getItem('quiz_token_' + username) || "";
+
     // Recolectar datos
     const payload = {
-        username: document.getElementById("username").value,
-        email: document.getElementById("email").value,
-        password: document.getElementById("password").value,
+        username: username,
+        token: token,
         p1: document.getElementById("p1").value,
         p2: document.getElementById("p2").value,
         p3: document.getElementById("p3").value
@@ -48,11 +50,15 @@ async function enviarQuiz() {
             btn.innerText = "Enviar Respuestas";
             btn.disabled = false;
         } else {
+            // Guardar token si el servidor asignó uno nuevo
+            if (resultado.token) {
+                localStorage.setItem('quiz_token_' + username, resultado.token);
+            }
+
             // Mejora de seguridad: limpiar campos sensibles del DOM
             // antes de mostrar el leaderboard, por si hubiera algún XSS residual
-            document.getElementById("email").value = "";
-            document.getElementById("password").value = "";
-            document.getElementById("username").value = "";
+            // Mantenemos el username para futuros intentos en la misma sesión, 
+            // pero si prefieres, lo puedes limpiar con document.getElementById("username").value = "";
 
             // Éxito: Ocultar quiz y mostrar Leaderboard
             document.getElementById("quiz-container").style.display = "none";
@@ -92,7 +98,7 @@ function reiniciarPantalla() {
     document.getElementById("btn-enviar").innerText = "Enviar Respuestas";
     document.getElementById("btn-enviar").disabled = false;
 
-    // Limpiamos solo las opciones del quiz, mantenemos email y password cargados
+    // Limpiamos solo las opciones del quiz, mantenemos username cargado
     document.getElementById("p1").value = "A";
     document.getElementById("p2").value = "A";
     document.getElementById("p3").value = "A";

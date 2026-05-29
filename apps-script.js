@@ -1,6 +1,179 @@
+// ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
+
+/**
+ * Lee el SALT global desde las Propiedades del Script.
+ * Si no existe, genera uno aleatorio y lo guarda de forma persistente.
+ */
+function obtenerSalt() {
+  var props = PropertiesService.getScriptProperties();
+  var salt = props.getProperty("GLOBAL_SALT");
+  if (!salt) {
+    salt = Utilities.getUuid();
+    props.setProperty("GLOBAL_SALT", salt);
+  }
+  return salt;
+}
+
+/**
+ * Aplica un hash SHA-256 a un texto combinado con el SALT.
+ */
+function hashear(texto, salt) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto + salt);
+  return bytes.map(function(b) {
+    return ('0' + (b & 0xFF).toString(16)).slice(-2);
+  }).join('');
+}
+
+/**
+ * Previene la inyección de fórmulas maliciosas en Google Sheets.
+ */
+function sanitizarParaHoja(value) {
+  if (typeof value === "string" && /^[=+\-@]/.test(value)) {
+    return "'" + value;
+  }
+  return value;
+}
+
+/**
+ * Parsea, sanitiza y valida los datos crudos recibidos del cliente.
+ * Lanza un error si algún campo es inválido.
+ */
+function parsearEntrada(params) {
+  var usernameRequest = String(params.username).trim();
+  if (!usernameRequest) throw new Error("Falta el nombre de usuario.");
+  if (usernameRequest.length > 30) {
+    throw new Error("El nombre de usuario no puede superar los 30 caracteres.");
+  }
+  if (!/^[a-zA-Z0-9_ áéíóúÁÉÍÓÚñÑüÜ]+$/.test(usernameRequest)) {
+    throw new Error("El nombre de usuario contiene caracteres sospechosos o no permitidos.");
+  }
+
+  // Verificar existencia de cada respuesta antes de castear
+  if (params.p1 === undefined || params.p2 === undefined || params.p3 === undefined) {
+    throw new Error("Faltan una o más respuestas del quiz.");
+  }
+  var opcionesValidas = ["A", "B", "C"];
+  var p1 = sanitizarParaHoja(String(params.p1).trim());
+  var p2 = sanitizarParaHoja(String(params.p2).trim());
+  var p3 = sanitizarParaHoja(String(params.p3).trim());
+  if (![p1, p2, p3].every(function(r) { return opcionesValidas.indexOf(r) !== -1; })) {
+    throw new Error("Las respuestas enviadas contienen valores no válidos.");
+  }
+
+  return {
+    username: usernameRequest,
+    token: params.token ? String(params.token).trim() : "",
+    p1: p1,
+    p2: p2,
+    p3: p3
+  };
+}
+
+/**
+ * Verifica que el usuario no haya superado el límite de intentos fallidos.
+ * Devuelve el número actual de intentos fallidos (o null si no hay ninguno).
+ */
+function verificarFuerzaBruta(cache, cacheKey) {
+  var failedAttempts = cache.get(cacheKey);
+  if (failedAttempts && parseInt(failedAttempts, 10) >= 5) {
+    throw new Error("Demasiados intentos fallidos. Por seguridad, espera 15 minutos antes de volver a intentarlo.");
+  }
+  return failedAttempts;
+}
+
+/**
+ * Busca el usuario en la hoja y valida su token.
+ * Devuelve un objeto con { isNewUser, userRowIndex, usernameFinal }.
+ * Lanza un error si el token no coincide (nombre de usuario tomado).
+ */
+function autenticarUsuario(dataUsuarios, usernameRequest, tokenRequest, tokenHashRecibido, cache, cacheKey, failedAttempts) {
+  for (var i = 1; i < dataUsuarios.length; i++) {
+    var rowUsername = String(dataUsuarios[i][0]).toLowerCase();
+
+    if (rowUsername === usernameRequest.toLowerCase()) {
+      var storedTokenHash = String(dataUsuarios[i][1]);
+
+      if (!tokenRequest || storedTokenHash !== tokenHashRecibido) {
+        var currentAttempts = failedAttempts ? parseInt(failedAttempts, 10) : 0;
+        cache.put(cacheKey, (currentAttempts + 1).toString(), 900); // 900 seg = 15 minutos
+        throw new Error("Este nombre de usuario ya está tomado. Si eres tú, usa tu dispositivo original o elige otro nombre.");
+      }
+
+      cache.remove(cacheKey); // Login exitoso: reiniciar contador de fuerza bruta
+      return {
+        isNewUser: false,
+        userRowIndex: i + 1, // +1 porque los arrays empiezan en 0 y las filas en 1
+        usernameFinal: dataUsuarios[i][0]
+      };
+    }
+  }
+
+  // No se encontró el username: es un usuario nuevo
+  return {
+    isNewUser: true,
+    userRowIndex: -1,
+    usernameFinal: usernameRequest
+  };
+}
+
+/**
+ * Evalúa las respuestas del quiz. Las respuestas correctas nunca salen de aquí.
+ * Cualquier inyección enviada en p1/p2/p3 simplemente cuenta como incorrecta.
+ */
+function evaluarRespuestas(p1, p2, p3) {
+  var correctas = { p1: "B", p2: "A", p3: "C" };
+  var puntaje = 0;
+  if (p1 === correctas.p1) puntaje++;
+  if (p2 === correctas.p2) puntaje++;
+  if (p3 === correctas.p3) puntaje++;
+  return puntaje;
+}
+
+var LEADERBOARD_CACHE_KEY = "leaderboard_top10";
+var LEADERBOARD_CACHE_TTL = 60; // segundos
+
+/**
+ * Devuelve el Top 10 del leaderboard.
+ * Usa caché de 60 segundos para evitar leer la hoja en cada petición.
+ * Llama a invalidarCacheLeaderboard(cache) después de escribir en la hoja.
+ */
+function construirLeaderboard(sheetUsuarios, cache) {
+  var cached = cache.get(LEADERBOARD_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
+  var updatedUsers = sheetUsuarios.getDataRange().getValues();
+  var leaderboard = [];
+  for (var j = 1; j < updatedUsers.length; j++) {
+    leaderboard.push({
+      user: String(updatedUsers[j][0]),
+      score: parseInt(updatedUsers[j][3], 10) || 0
+    });
+  }
+  leaderboard.sort(function(a, b) { return b.score - a.score; });
+  leaderboard = leaderboard.slice(0, 10);
+
+  cache.put(LEADERBOARD_CACHE_KEY, JSON.stringify(leaderboard), LEADERBOARD_CACHE_TTL);
+  return leaderboard;
+}
+
+/**
+ * Invalida el caché del leaderboard para que la siguiente petición lo reconstruya.
+ * Llamar siempre después de escribir datos en la hoja de Usuarios.
+ */
+function invalidarCacheLeaderboard(cache) {
+  cache.remove(LEADERBOARD_CACHE_KEY);
+}
+
+
+// ============================================================
+// FUNCIÓN PRINCIPAL
+// ============================================================
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Intentar adquirir el bloqueo por hasta 10 segundos
+  // Intentar adquirir el bloqueo por hasta 10 segundos para evitar condiciones de carrera
   if (!lock.tryLock(10000)) {
     return ContentService.createTextOutput(JSON.stringify({
       estado: "error",
@@ -9,155 +182,70 @@ function doPost(e) {
   }
 
   try {
-    // 1. Parsear los datos recibidos y sanitizarlos (Prevenir inyección)
-    var params = JSON.parse(e.postData.contents);
-    var email = String(params.email).trim().toLowerCase();
-    var password = String(params.password).trim();
-    var usernameRequest = String(params.username).trim();
-    
-    // Función para evitar inyección de fórmulas en Google Sheets
-    function sanitizeForSheet(value) {
-      if (typeof value === "string" && /^[=+\-@]/.test(value)) {
-        return "'" + value;
-      }
-      return value;
-    }
+    var SALT  = obtenerSalt();
+    var input = parsearEntrada(JSON.parse(e.postData.contents));
 
-    var p1 = sanitizeForSheet(String(params.p1).trim());
-    var p2 = sanitizeForSheet(String(params.p2).trim());
-    var p3 = sanitizeForSheet(String(params.p3).trim());
+    var cache          = CacheService.getScriptCache();
+    var cacheKey       = "bruteforce_" + input.username.toLowerCase();
+    var failedAttempts = verificarFuerzaBruta(cache, cacheKey);
 
-    if (!email || !password) throw new Error("Faltan el correo o la contraseña.");
-    
-    // Validar formato de correo para prevenir inyecciones y errores
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error("Formato de correo electrónico inválido.");
-    }
+    var tokenHashRecibido = input.token ? hashear(input.token, SALT) : "";
 
-    // Prevención de ataques de fuerza bruta usando Cache
-    var cache = CacheService.getScriptCache();
-    var cacheKey = "bruteforce_" + email;
-    var failedAttempts = cache.get(cacheKey);
-    if (failedAttempts && parseInt(failedAttempts) >= 5) {
-      throw new Error("Demasiados intentos fallidos. Por seguridad, espera 15 minutos antes de volver a intentarlo.");
-    }
-
-    // Encriptar la contraseña usando SHA-256
-    var hashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password);
-    var hashedPassword = hashBytes.map(function(b) {
-        return ('0' + (b & 0xFF).toString(16)).slice(-2);
-    }).join('');
-
-    if (usernameRequest && !/^[a-zA-Z0-9_ áéíóúÁÉÍÓÚñÑüÜ]+$/.test(usernameRequest)) {
-      throw new Error("El nombre de usuario contiene caracteres sospechosos o no permitidos.");
-    }
-
-    var libro = SpreadsheetApp.getActiveSpreadsheet();
-    var sheetUsuarios = libro.getSheetByName("Usuarios");
+    var libro           = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetUsuarios   = libro.getSheetByName("Usuarios");
     var sheetResultados = libro.getSheetByName("Resultados");
-    var dataUsuarios = sheetUsuarios.getDataRange().getValues();
+    var dataUsuarios    = sheetUsuarios.getDataRange().getValues();
 
-    var userRowIndex = -1;
-    var isNewUser = true;
-    var usernameFinal = usernameRequest;
-
-    // 2. Lógica de Autenticación y Validación de Usuario
-    for (var i = 1; i < dataUsuarios.length; i++) {
-      var rowEmail = String(dataUsuarios[i][1]).toLowerCase();
-      var rowUsername = String(dataUsuarios[i][0]).toLowerCase();
-      
-      // Si el correo ya existe, es un usuario recurrente
-      if (rowEmail === email) {
-        userRowIndex = i + 1; // +1 porque los arreglos empiezan en 0 y las filas en 1
-        isNewUser = false;
-        
-        // Validar contraseña comparando los hashes
-        if (String(dataUsuarios[i][2]) !== hashedPassword) {
-          var currentAttempts = failedAttempts ? parseInt(failedAttempts) : 0;
-          cache.put(cacheKey, (currentAttempts + 1).toString(), 900); // 900 seg = 15 minutos
-          throw new Error("Credenciales inválidas o el nombre de usuario no está disponible.");
-        } else {
-          // Si el login es exitoso, reiniciar intentos
-          cache.remove(cacheKey);
-        }
-        
-        // Forzamos a usar el username que ya tiene registrado
-        usernameFinal = dataUsuarios[i][0]; 
-        break;
-      }
-      
-      // Si el correo no existe, pero el nombre de usuario que intenta registrar ya está tomado
-      if (isNewUser && rowUsername === usernameRequest.toLowerCase()) {
-        throw new Error("Credenciales inválidas o el nombre de usuario no está disponible.");
-      }
-    }
+    var auth = autenticarUsuario(dataUsuarios, input.username, input.token, tokenHashRecibido, cache, cacheKey, failedAttempts);
 
     var intentosRestantes = 3;
-    var mejorPuntaje = 0;
+    var mejorPuntaje      = 0;
+    var newTokenToReturn  = null;
+    var finalTokenHash    = tokenHashRecibido;
 
-    // 3. Control de Intentos
-    if (!isNewUser) {
-      intentosRestantes = parseInt(dataUsuarios[userRowIndex - 1][3]);
-      mejorPuntaje = parseInt(dataUsuarios[userRowIndex - 1][4]) || 0;
+    if (!auth.isNewUser) {
+      intentosRestantes = parseInt(dataUsuarios[auth.userRowIndex - 1][2], 10);
+      mejorPuntaje      = parseInt(dataUsuarios[auth.userRowIndex - 1][3], 10) || 0;
       if (intentosRestantes <= 0) {
-        throw new Error("Ya has agotado tus 3 intentos permitados.");
+        throw new Error("Ya has agotado tus 3 intentos permitidos.");
       }
     } else {
-      if (!usernameRequest) throw new Error("Debes elegir un nombre de usuario para tu primer intento.");
+      // Usuario nuevo: generamos y hasheamos su token único
+      newTokenToReturn = Utilities.getUuid();
+      finalTokenHash   = hashear(newTokenToReturn, SALT);
     }
 
-    // 4. Evaluación Segura (Las respuestas correctas nunca salen de aquí)
-    var correctas = { p1: "B", p2: "A", p3: "C" };
-    var puntaje = 0;
-    
-    // Solo sumamos si la respuesta enviada coincide exactamente. 
-    // Cualquier inyección de SQL o JS enviada en p1/p2/p3 simplemente se evalúa como incorrecta.
-    if (p1 === correctas.p1) puntaje++;
-    if (p2 === correctas.p2) puntaje++;
-    if (p3 === correctas.p3) puntaje++;
-
+    var puntaje = evaluarRespuestas(input.p1, input.p2, input.p3);
     intentosRestantes--;
     if (puntaje > mejorPuntaje) mejorPuntaje = puntaje;
 
-    // 5. Guardar Datos en Hojas
-    if (isNewUser) {
-      // Nuevo usuario
-      sheetUsuarios.appendRow([usernameFinal, email, hashedPassword, intentosRestantes, mejorPuntaje]);
+    // Guardar en la hoja de Usuarios (estructura: Username, TokenHash, Intentos, MejorPuntaje)
+    if (auth.isNewUser) {
+      sheetUsuarios.appendRow([auth.usernameFinal, finalTokenHash, intentosRestantes, mejorPuntaje]);
     } else {
-      // Actualizar usuario existente
-      sheetUsuarios.getRange(userRowIndex, 4).setValue(intentosRestantes);
-      sheetUsuarios.getRange(userRowIndex, 5).setValue(mejorPuntaje);
+      sheetUsuarios.getRange(auth.userRowIndex, 3).setValue(intentosRestantes);
+      sheetUsuarios.getRange(auth.userRowIndex, 4).setValue(mejorPuntaje);
     }
 
-    // Guardar el registro de este intento
-    sheetResultados.appendRow([new Date(), usernameFinal, p1, p2, p3, puntaje]);
+    // Guardar el registro de este intento en la hoja de Resultados
+    sheetResultados.appendRow([new Date(), auth.usernameFinal, input.p1, input.p2, input.p3, puntaje]);
 
-    // 6. Generar el Tablero de Posiciones (Leaderboard seguro)
-    // Volvemos a leer los datos actualizados
-    var updatedUsers = sheetUsuarios.getDataRange().getValues();
-    var leaderboard = [];
-    for (var j = 1; j < updatedUsers.length; j++) {
-      leaderboard.push({
-        user: String(updatedUsers[j][0]),
-        score: parseInt(updatedUsers[j][4]) || 0
-      });
-    }
-    
-    // Ordenar de mayor a menor puntaje
-    leaderboard.sort(function(a, b) { return b.score - a.score; });
-    // Tomar solo el Top 10
-    leaderboard = leaderboard.slice(0, 10);
+    // Invalidar el caché del leaderboard porque los datos de la hoja cambiaron
+    invalidarCacheLeaderboard(cache);
 
-    // 7. Enviar respuesta al Frontend
-    return ContentService.createTextOutput(JSON.stringify({
+    var jsonResponse = {
       estado: "exito",
       puntajeObtenido: puntaje,
       intentosRestantes: intentosRestantes,
-      leaderboard: leaderboard
-    })).setMimeType(ContentService.MimeType.JSON);
+      leaderboard: construirLeaderboard(sheetUsuarios, cache)
+    };
+
+    // Solo incluimos el token en la respuesta si fue recién generado
+    if (newTokenToReturn) jsonResponse.token = newTokenToReturn;
+
+    return ContentService.createTextOutput(JSON.stringify(jsonResponse)).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
-    // Si arrojamos un error arriba, lo mandamos a la app
     return ContentService.createTextOutput(JSON.stringify({
       estado: "error",
       mensaje: error.message
